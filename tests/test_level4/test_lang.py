@@ -1,5 +1,6 @@
 """Test language selectors."""
 from .. import util
+from soupsieve import SelectorSyntaxError
 
 
 class TestLang(util.TestCase):
@@ -192,6 +193,12 @@ class TestLang(util.TestCase):
             ['1', '3', '4'],
             flags=util.HTML
         )
+
+    def test_language_unclosed_quote(self):
+        """Test language with an unclosed quoted value fails for syntax error, not timeout error."""
+
+        self.assert_raises_no_timeout(':lang("' + ('x' * 300), SelectorSyntaxError)
+        self.assert_raises_no_timeout(":lang('" + ('x' * 300), SelectorSyntaxError)
 
     def test_language_list(self):
         """Test language list."""

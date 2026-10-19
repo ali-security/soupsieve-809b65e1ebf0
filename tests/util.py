@@ -1,6 +1,9 @@
 """Test utilities."""
 import unittest
 import bs4
+import faulthandler
+import signal
+import sys
 import textwrap
 import soupsieve as sv
 import pytest
@@ -102,6 +105,36 @@ class TestCase(unittest.TestCase):
         print('----Running Assert Test----')
         with self.assertRaises(exception):
             self.compile_pattern(pattern, namespaces=namespace, custom=custom)
+
+    def assert_raises_no_timeout(self, pattern, exception, timeout=3):
+        """Assert pattern fails with the given exception, not a timeout (catastrophic backtracking)."""
+
+        def timeout_handler(signum, frame):
+            raise TimeoutError
+
+        # `SIGALRM` is not available on all platforms (Windows), so fall back to a watchdog
+        # that dumps the traceback and aborts the test run if compiling the pattern hangs.
+        use_alarm = hasattr(signal, 'SIGALRM')
+        if use_alarm:
+            handler = signal.signal(signal.SIGALRM, timeout_handler)
+            signal.alarm(timeout)
+        else:
+            faulthandler.dump_traceback_later(timeout, exit=True, file=sys.__stderr__)
+
+        passed = False
+        try:
+            with self.assertRaises(exception):
+                sv.compile(pattern)
+            passed = True
+        except TimeoutError:
+            pass
+        finally:
+            if use_alarm:
+                signal.alarm(0)
+                signal.signal(signal.SIGALRM, handler if handler is not None else signal.SIG_DFL)
+            else:
+                faulthandler.cancel_dump_traceback_later()
+        self.assertTrue(passed)
 
     def assert_selector(self, markup, selectors, expected_ids, namespaces={}, custom=None, flags=0):
         """Assert selector."""
